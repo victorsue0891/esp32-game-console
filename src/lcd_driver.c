@@ -40,6 +40,18 @@ static void lcd_data(const uint8_t *data, int len)
     spi_device_polling_transmit(spi_handle, &t);
 }
 
+/* Large pixel-data transfers: DMA-driven, yields the calling task while SPI runs */
+static void lcd_data_large(const uint8_t *data, int len)
+{
+    if (len == 0) return;
+    spi_transaction_t t = {
+        .length = (size_t)len * 8,
+        .tx_buffer = data,
+    };
+    gpio_set_level(LCD_PIN_DC, 1);
+    spi_device_transmit(spi_handle, &t);  /* yields CPU to FreeRTOS scheduler */
+}
+
 static void lcd_data_byte(uint8_t val)
 {
     lcd_data(&val, 1);
@@ -195,13 +207,13 @@ void lcd_flush_area(int x1, int y1, int x2, int y2,
 {
     lcd_set_window(x1, y1, x2, y2);
     int len = (x2 - x1 + 1) * (y2 - y1 + 1);
-    lcd_data((const uint8_t *)color_data, len * 2);
+    lcd_data_large((const uint8_t *)color_data, len * 2);
 }
 
 void lcd_flush(const uint16_t *buf, size_t len)
 {
     lcd_set_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
-    lcd_data((const uint8_t *)buf, len);
+    lcd_data_large((const uint8_t *)buf, (int)len);
 }
 
 void lcd_set_backlight(int brightness)

@@ -5,6 +5,7 @@
 #include "freertos/queue.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include <stdatomic.h>
 #include <string.h>
 
 static const char *TAG = "button";
@@ -23,9 +24,11 @@ static const gpio_num_t btn_gpio[BTN_ID_MAX] = {
     [BTN_ID_VOL_DOWN] = BTN_VOL_DOWN,
 };
 
-/* Debounce state */
-static bool btn_state[BTN_ID_MAX];
+/* Debounce state — btn_local_state only accessed from debounce task (Core 0).
+ * btn_atomic_state is the cross-core view: safe to read from Core 1. */
+static bool btn_local_state[BTN_ID_MAX];
 static uint8_t debounce_cnt[BTN_ID_MAX];
+static atomic_uint_fast16_t btn_atomic_state;
 static button_event_cb_t event_cb = NULL;
 
 #define DEBOUNCE_THRESHOLD 3
@@ -67,8 +70,9 @@ void button_init(void)
         gpio_isr_handler_add(btn_gpio[i], gpio_isr_handler, NULL);
     }
 
-    memset(btn_state, 0, sizeof(btn_state));
+    memset(btn_local_state, 0, sizeof(btn_local_state));
     memset(debounce_cnt, 0, sizeof(debounce_cnt));
+    atomic_store(&btn_atomic_state, 0);
     ESP_LOGI(TAG, "Buttons initialized (ISR + debounce)");
 }
 
@@ -80,13 +84,7 @@ bool button_is_pressed(button_id_t btn)
 
 uint16_t button_get_state(void)
 {
-    uint16_t mask = 0;
-    for (int i = 0; i < BTN_ID_MAX; i++) {
-        if (btn_state[i]) {
-            mask |= (1 << i);
-        }
-    }
-    return mask;
+    return (uint16_t)atomic_load(&btn_atomic_state);
 }
 
 void button_register_cb(button_event_cb_t cb)
@@ -117,12 +115,21 @@ static void button_debounce_task(void *arg)
             for (int i = 0; i < BTN_ID_MAX; i++) {
                 bool raw = (gpio_get_level(btn_gpio[i]) == 0);
 
-                if (raw != btn_state[i]) {
+                if (raw != btn_local_state[i]) {
                     debounce_cnt[i]++;
                     any_unstable = true;
                     if (debounce_cnt[i] >= DEBOUNCE_THRESHOLD) {
-                        btn_state[i] = raw;
+                        btn_local_state[i] = raw;
                         debounce_cnt[i] = 0;
+                        /* Atomically update the shared bitmask so Core 1
+                         * always sees a consistent snapshot. */
+                        if (raw) {
+                            atomic_fetch_or(&btn_atomic_state,
+                                            (uint_fast16_t)(1u << i));
+                        } else {
+                            atomic_fetch_and(&btn_atomic_state,
+                                             (uint_fast16_t)~(1u << i));
+                        }
                         if (event_cb) {
                             event_cb((button_id_t)i, raw);
                         }

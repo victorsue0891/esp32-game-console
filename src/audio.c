@@ -27,7 +27,7 @@ esp_err_t audio_init(void)
 
     /* Channel config – larger DMA buffers reduce underrun risk */
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-    chan_cfg.dma_desc_num = 12;
+    chan_cfg.dma_desc_num = 24;   /* doubled: reduces underrun probability */
     chan_cfg.dma_frame_num = 512;
 
     esp_err_t ret = i2s_new_channel(&chan_cfg, &tx_handle, NULL);
@@ -90,9 +90,23 @@ void audio_write(const int16_t *samples, size_t count)
         }
 
         size_t bytes_written = 0;
-        /* Non-blocking write: skip frames rather than stalling emulation */
-        i2s_channel_write(tx_handle, buf, chunk * sizeof(int16_t),
+        size_t bytes_to_write = chunk * sizeof(int16_t);
+        i2s_channel_write(tx_handle, buf, bytes_to_write,
                           &bytes_written, pdMS_TO_TICKS(10));
+
+        /* If write timed out, fill remaining space with silence so the I2S
+         * clock keeps running and avoids audible pops or DAC underrun. */
+        if (bytes_written < bytes_to_write) {
+            static const int16_t silence[512] = {0};
+            size_t gap = bytes_to_write - bytes_written;
+            while (gap > 0) {
+                size_t sil_len = (gap > sizeof(silence)) ? sizeof(silence) : gap;
+                size_t sil_written = 0;
+                i2s_channel_write(tx_handle, silence, sil_len, &sil_written, 0);
+                if (sil_written == 0) break;
+                gap -= sil_written;
+            }
+        }
 
         src += chunk;
         remaining -= chunk;
