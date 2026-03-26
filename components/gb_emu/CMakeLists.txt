@@ -1,0 +1,14 @@
+idf_component_register(
+    SRCS
+        "src/gb_cpu.c"
+        "src/gb_ppu.c"
+        "src/gb_apu.c"
+        "src/gb_cart.c"
+        "src/gb_emu.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        esp_common
+        heap
+        log
+)
