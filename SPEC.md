@@ -33,7 +33,7 @@
 * **Extension:** PlatformIO (Espressif 32 platform)
 * **Framework:** ESP-IDF v5.2.1
 * **Board:** esp32-s3-devkitc-1-n16r8v
-* **UI Library:** LVGL v8.4.0
+* **UI Library:** LVGL v8.3.x
 
 ## 4. Software Architecture & Task Management
 系統採用 FreeRTOS 多核心多任務架構：

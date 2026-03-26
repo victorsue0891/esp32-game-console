@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build System
 
-This project uses **PlatformIO** with **ESP-IDF v5.2.1** (IDF path configured at `D:\tools\esp\v5.5.1\esp-idf` in `.vscode/settings.json`).
+This project uses **PlatformIO** with **ESP-IDF v5.5.1** (IDF path configured at `D:\tools\esp\v5.5.1\esp-idf` in `.vscode/settings.json`).
 
 ```bash
 pio run                         # Compile
@@ -74,8 +74,8 @@ Both emulators live under `components/` as ESP-IDF components with their own `CM
   roms/nes/       # NES ROMs (.nes)
   roms/gb/        # GameBoy ROMs (.gb)
   saves/          # Save states
-  system/wifi.cfg # WiFi credentials for OTA
-  splash.jpg      # Optional boot splash image
+  system/wifi.cfg  # WiFi credentials for OTA
+  system/boot.jpg  # Optional boot splash image
 ```
 
 ## Memory Constraints
