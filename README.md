@@ -183,4 +183,6 @@ ESP32-Game-Console/
 
 ## License
 
-本專案供學習與研究用途。遊戲 ROM 檔案需由使用者自行合法取得。
+本專案以 **MIT License** 授權釋出，詳見 [LICENSE](LICENSE)。
+
+遊戲 ROM 檔案受各自版權保護，需由使用者自行合法取得，本專案不提供任何 ROM 檔案。
