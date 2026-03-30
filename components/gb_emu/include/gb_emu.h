@@ -31,3 +31,20 @@ void gb_set_joypad(uint8_t buttons);
 const uint16_t *gb_get_framebuffer(void);
 const int16_t *gb_get_audio(int *out_count);
 void gb_shutdown(void);
+
+/* ---- Save State API ---- */
+
+/** Return the number of bytes required for a full state snapshot. */
+size_t gb_get_state_size(void);
+
+/**
+ * Serialise the complete emulator state into @p buf.
+ * @p buf must be at least gb_get_state_size() bytes.
+ */
+void gb_save_state(void *buf);
+
+/**
+ * Restore the emulator state from a previously saved snapshot.
+ * @return true if the buffer looks valid (magic check).
+ */
+bool gb_load_state(const void *buf);

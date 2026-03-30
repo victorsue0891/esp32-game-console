@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 
+#include <stdatomic.h>
 #include <string.h>
 
 static const char *TAG = "audio";
@@ -12,6 +13,11 @@ static const char *TAG = "audio";
 static i2s_chan_handle_t tx_handle = NULL;
 static int current_volume = VOLUME_DEFAULT;
 static bool is_muted = false;
+
+/* A/V sync credit: tracks I2S queue health.
+ * Incremented on successful write (audio ahead), decremented on timeout (audio behind).
+ * Emulator uses this to pace video: if credit > 2, audio is running fast, slow video slightly. */
+static atomic_int av_credit = 2;
 
 /* Fixed-point volume multiplier: vol * 256 / 100 */
 static uint16_t vol_shift = 0;
@@ -94,9 +100,18 @@ void audio_write(const int16_t *samples, size_t count)
         i2s_channel_write(tx_handle, buf, bytes_to_write,
                           &bytes_written, pdMS_TO_TICKS(10));
 
-        /* If write timed out, fill remaining space with silence so the I2S
-         * clock keeps running and avoids audible pops or DAC underrun. */
-        if (bytes_written < bytes_to_write) {
+        /* Track I2S queue health for A/V sync credit. */
+        if (bytes_written >= bytes_to_write) {
+            /* Audio queue has space — credit the video side. */
+            int c = atomic_load(&av_credit);
+            if (c < 4) atomic_fetch_add(&av_credit, 1);
+        } else {
+            /* Write timed out — audio is falling behind. */
+            int c = atomic_load(&av_credit);
+            if (c > 0) atomic_fetch_sub(&av_credit, 1);
+
+            /* Fill remaining space with silence so the I2S clock keeps
+             * running and avoids audible pops or DAC underrun. */
             static const int16_t silence[512] = {0};
             size_t gap = bytes_to_write - bytes_written;
             while (gap > 0) {
@@ -111,6 +126,11 @@ void audio_write(const int16_t *samples, size_t count)
         src += chunk;
         remaining -= chunk;
     }
+}
+
+int audio_get_av_credit(void)
+{
+    return atomic_load(&av_credit);
 }
 
 void audio_set_volume(int vol)

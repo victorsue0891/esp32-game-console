@@ -63,3 +63,20 @@ const int16_t *nes_get_audio(int *out_count);
  * Shut down the NES emulator and free resources.
  */
 void nes_shutdown(void);
+
+/* ---- Save State API ---- */
+
+/** Return the number of bytes required for a full state snapshot. */
+size_t nes_get_state_size(void);
+
+/**
+ * Serialise the complete emulator state into @p buf.
+ * @p buf must be at least nes_get_state_size() bytes.
+ */
+void nes_save_state(void *buf);
+
+/**
+ * Restore the emulator state from a previously saved snapshot.
+ * @return true if the buffer looks valid (magic check).
+ */
+bool nes_load_state(const void *buf);

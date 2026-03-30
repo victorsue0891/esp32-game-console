@@ -33,6 +33,13 @@ int audio_get_volume(void);
 void audio_set_mute(bool mute);
 
 /**
+ * Return the current A/V sync credit (0–4).
+ * Values > 2 mean audio is running ahead of video; the emulator may delay
+ * video slightly to keep A/V aligned.
+ */
+int audio_get_av_credit(void);
+
+/**
  * De-initialize audio driver.
  */
 void audio_deinit(void);
