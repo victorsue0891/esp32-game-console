@@ -133,6 +133,11 @@ int audio_get_av_credit(void)
     return atomic_load(&av_credit);
 }
 
+void audio_reset_av_credit(void)
+{
+    atomic_store(&av_credit, 2);
+}
+
 void audio_set_volume(int vol)
 {
     if (vol < VOLUME_MIN) vol = VOLUME_MIN;

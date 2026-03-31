@@ -26,6 +26,7 @@
 #include "nvs_flash.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_ota_ops.h"
 
 static const char *TAG = "main";
 
@@ -140,6 +141,11 @@ void app_main(void)
     /* 3. Start button polling task */
     button_register_cb(on_button_event);
     button_task_start();
+
+    /* All critical hardware initialised — cancel OTA rollback watchdog.
+     * Without this call, ESP-IDF rolls back to the previous firmware on
+     * the next reboot when the new image was flashed via OTA. */
+    esp_ota_mark_app_valid_cancel_rollback();
 
     /* 4. Show splash screen (blocks until Start pressed) */
     splash_show();

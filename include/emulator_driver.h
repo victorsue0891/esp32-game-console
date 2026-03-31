@@ -26,6 +26,14 @@ typedef struct {
     int fb_height;
 
     /**
+     * Optional: validate raw ROM data before passing to init().
+     * NULL means accept any file that matches .ext without further checks.
+     * Called by emulator.c; do not call from driver code.
+     * @return true if the ROM is valid.
+     */
+    bool (*validate)(const uint8_t *rom_data, size_t rom_size);
+
+    /**
      * Load ROM data and initialise hardware state.
      * @return true on success.
      */

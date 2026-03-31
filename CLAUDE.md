@@ -39,12 +39,13 @@ main.c  (task creation, button event routing, boot sequence)
 
 ### Key Architectural Details
 
-- **ROM loading** (`emulator.c`): detects ROM type by file extension/header, allocates framebuffer and ROM in PSRAM, builds integer scaling LUTs for 240×320→emulator-native resolution mapping.
-- **Frame pipeline**: emulator core writes to PSRAM framebuffer → `emulator.c` scales → `lcd_driver.c` DMA-flushes over SPI2 at 40MHz.
-- **Audio pipeline**: emulator APU fills sample buffer → `audio.c` writes to I2S queue (10ms non-blocking timeout) → MAX98357 DAC at 22050Hz.
+- **Emulator vtable** (`include/emulator_driver.h`): `emulator_driver_t` struct holds all per-system function pointers (`validate`, `init`, `run_frame`, `set_input`, `get_framebuffer`, `get_audio`, `save_state`, `load_state`, `shutdown`). Adding a new system requires implementing the vtable and adding one entry to `drivers[]` in `emulator.c` — no other file changes.
+- **ROM loading** (`emulator.c`): driver selected by file extension via `find_driver_by_ext()`, ROM loaded into PSRAM, validated via `driver->validate()`, then passed to `driver->init()`. Integer scaling LUTs built once per driver for 240×320→emulator-native resolution mapping.
+- **Double-framebuffer display pipeline**: two PSRAM buffers (`lcd_fb[2]`), producer-consumer flow controlled by `buf_free_sem` (counting semaphore, initial count 2) and `disp_queue` (queue size 1). Emulator task (Core 1, prio 6) writes frames non-blocking; dedicated `lcd_flush_task` (Core 1, prio 5) flushes to LCD via SPI2 DMA at 40MHz. Emulator skips display for a frame if both slots are in use but continues emulation and audio at full speed (~26fps display, 60fps emulation).
+- **Audio pipeline + A/V sync**: emulator APU fills sample buffer → `audio.c` writes to I2S DMA queue (10ms timeout) → MAX98357 DAC at 22050Hz. `av_credit` (atomic int, 0–4) tracks I2S queue health; emulator yields 2ms when credit > 2 to let the LCD task catch up.
 - **Button events**: GPIO ISR with debounce → callback registered in `main.c` routes to active context (game_launcher / emulator / pause_menu).
 - **Settings persistence**: NVS (non-volatile storage) used for theme, volume, and WiFi credentials via `theme_manager.c` and `settings_screen.c`.
-- **OTA updates**: configured via `/system/wifi.cfg` on SD card (SSID/PASS/OTA_URL), writes to alternate OTA partition; rollback enabled on boot failure.
+- **OTA updates**: configured via `/system/wifi.cfg` on SD card (SSID/PASS/OTA_URL), writes to alternate OTA partition; `esp_ota_mark_app_valid_cancel_rollback()` called in `main.c` after hardware init to prevent rollback on next reboot.
 
 ### Hardware Pinout (from `include/config.h`)
 

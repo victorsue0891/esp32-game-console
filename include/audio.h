@@ -40,6 +40,13 @@ void audio_set_mute(bool mute);
 int audio_get_av_credit(void);
 
 /**
+ * Reset A/V sync credit to the neutral value (2).
+ * Must be called at the start of each emulator session so stale credit
+ * from a previous session does not bias the new one.
+ */
+void audio_reset_av_credit(void);
+
+/**
  * De-initialize audio driver.
  */
 void audio_deinit(void);

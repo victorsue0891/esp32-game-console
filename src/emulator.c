@@ -118,6 +118,7 @@ static const emulator_driver_t nes_driver = {
     .ext             = ".nes",
     .fb_width        = NES_WIDTH,
     .fb_height       = NES_HEIGHT,
+    .validate        = validate_nes_rom,
     .init            = nes_init,
     .run_frame       = nes_run_frame,
     .set_input       = nes_drv_set_input,
@@ -139,6 +140,7 @@ static const emulator_driver_t gb_driver = {
     .ext             = ".gb",
     .fb_width        = GB_WIDTH,
     .fb_height       = GB_HEIGHT,
+    .validate        = validate_gb_rom,
     .init            = gb_init,
     .run_frame       = gb_run_frame,
     .set_input       = gb_drv_set_input,
@@ -317,17 +319,12 @@ static void emulator_task(void *arg)
 {
     const char *rom_path = (const char *)arg;
 
-    /* Determine validator */
-    bool (*validator)(const uint8_t *, size_t) = NULL;
-    if (current_driver == &nes_driver) validator = validate_nes_rom;
-    else if (current_driver == &gb_driver) validator = validate_gb_rom;
-
     /* Load ROM */
     size_t rom_size = 0;
     uint8_t *rom_data = load_rom_file(rom_path, &rom_size);
     if (!rom_data) goto task_exit;
 
-    if (validator && !validator(rom_data, rom_size)) {
+    if (current_driver->validate && !current_driver->validate(rom_data, rom_size)) {
         free(rom_data); goto task_exit;
     }
 
@@ -396,9 +393,8 @@ static void emulator_task(void *arg)
     ESP_LOGI(TAG, "[%s] emulator stopped", current_driver->name);
 
 task_exit:
-    for (int i = 0; i < 2; i++) {
-        if (lcd_fb[i]) { free(lcd_fb[i]); lcd_fb[i] = NULL; }
-    }
+    /* Do NOT free lcd_fb[] here — the LCD flush task may still be reading it.
+     * emulator_stop() kills the LCD task first, then frees lcd_fb[]. */
     running = false;
     emu_task_handle = NULL;
     if (stop_sem) xSemaphoreGive(stop_sem);
@@ -481,6 +477,7 @@ bool emulator_start(const char *rom_path)
     /* Emulator stop semaphore */
     if (!stop_sem) stop_sem = xSemaphoreCreateBinary();
 
+    audio_reset_av_credit();  /* reset stale credit from any previous session */
     paused = false;
     running = true;
 
@@ -512,13 +509,17 @@ void emulator_stop(void)
             ESP_LOGW(TAG, "Emulator task did not exit within 5 s");
     }
 
-    /* Stop the LCD flush task */
+    /* Kill the LCD flush task first, THEN free lcd_fb[].
+     * This ordering is mandatory: freeing before kill creates a use-after-free
+     * if the LCD task is mid-flush when the emulator task signals stop_sem. */
     if (lcd_flush_task_handle) {
         vTaskDelete(lcd_flush_task_handle);
         lcd_flush_task_handle = NULL;
     }
+    for (int i = 0; i < 2; i++) {
+        if (lcd_fb[i]) { free(lcd_fb[i]); lcd_fb[i] = NULL; }
+    }
 
-    /* lcd_fb[] freed by emulator_task itself on exit */
     emu_task_handle = NULL;
     current_driver = NULL;
     ESP_LOGI(TAG, "Emulator stopped");
